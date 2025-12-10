@@ -1,5 +1,5 @@
 # ArgParser
-A single header library to simplify argument parsing for smaller application.
+A single header library to simplify argument parsing for smaller applications.
 
 Handles most cases except:
 - multiple occurrences (like '-vvv' for increased verboseness)
