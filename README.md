@@ -6,7 +6,7 @@ Handles most cases except:
 - capturing all at the end (like specifying multiple input-files)
 
 ## Build
-Just copy the header into your code or specify the include directory to your checkout directory
+Just copy the header into your code or specify the include directory to your checkout directory/src
 
 ## Testing
 You need 'https://github.com/gnilk/testrunner' in order to run the unit tests.
