@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
-project(gnklog)
+project(ArgParser)
 
 
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "")
