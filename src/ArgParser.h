@@ -272,10 +272,17 @@ protected:
             auto first = sv.data();
             auto last  = sv.data() + sv.size();
 
+            // This is only available on macos from 26.0 and onwards...
+
             // std::from_chars handles all integers and floating point (C++17+)
-            auto [ptr, ec] = std::from_chars(first, last, out);
-            if (ec == std::errc{} && ptr == last)
+//            auto [ptr, ec] = std::from_chars(first, last, out);
+//            if (ec == std::errc{} && ptr == last)
+//                return out;
+
+            auto ec = parse_number(first, last, out);
+            if (ec == std::errc{}) {
                 return out;
+            }
 
             return std::nullopt;
         }
@@ -283,6 +290,34 @@ protected:
             // Unsupported type; static assert provides helpful compile-time error
             static_assert(!sizeof(T*), "convert_to<T>: Unsupported type");
         }
+    }
+
+    template<typename T>
+    std::errc parse_number(const char* first, const char* last, T& out) const {
+#if defined(__cpp_lib_to_chars)
+        // Use real from_chars
+        auto r = std::from_chars(first, last, out);
+        return r.ec;
+#else
+        // Fallback: use strtol / strtod depending on T
+        if constexpr (std::is_integral_v<T>) {
+            errno = 0;
+            char* end;
+            long long v = std::strtoll(first, &end, 10);
+            if (errno != 0 || end != last)
+                return std::errc::invalid_argument;
+            out = static_cast<T>(v);
+            return {};
+        } else if constexpr (std::is_floating_point_v<T>) {
+            errno = 0;
+            char* end;
+            double v = std::strtod(first, &end);
+            if (errno != 0 || end != last)
+                return std::errc::invalid_argument;
+            out = static_cast<T>(v);
+            return {};
+        }
+#endif
     }
 private:
     std::span<const char *> args;

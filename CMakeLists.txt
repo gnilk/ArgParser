@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 project(ArgParser)
 
-
-set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "")
-set(CMAKE_OSX_SYSROOT /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
@@ -21,4 +17,10 @@ add_executable(ex1 ${ex1_src})
 target_include_directories(ex1 PUBLIC src)
 
 add_library(utests SHARED ${utest_src})
+
+if (APPLE)
+    message(STATUS Apple)
+    # testrunner defaults to /usr/local on macos...  which is not normally part of the default include path
+    target_include_directories(utests PUBLIC src /usr/local/include)
+endif()
 target_include_directories(utests PUBLIC src)
