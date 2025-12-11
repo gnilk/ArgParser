@@ -18,98 +18,239 @@
 //
 // See tests/test_argparser.cpp for examples or the example/ex1_app.cpp
 //
-// TODO:
-//  - Count occurrences (like increase verbose on multiple '-v' or '-vvv')
-//  - Collect all at end, like:  ./app -out output.bin input_a.bin input_b.bin input_c.bin ...
+// Features:
+//  - Flags present/non-present (on/off toggles)
+//  - Count the presence of an option across all arguments (like; verbose level)
+//  - Arguments carrying single value
+//  - Catch all at the end
+//
+// Unsupported features:
+//  - advanced 'catch end'
+//     like:  ./app -i <input> <out1> <out2> <out3>
+//     'input' would be part of the catch-end array
+//     possible to check with 'IsLastArgument' but I would not recommend using this if you such advanced cmd-lines..
 //
 // Use from main like:
 //      argParser = ArgParse(argc, argv);
-//      auto value = TryParse("-i", "--input_file", {});        // if no default
+//      auto value = argParser.TryParse({}, "-i", "--input_file");
+//      bool doSomething = argParser.IsPresent("-f", "--flag");
+//      auto value2 = argParser.TryParse(42, "-n", "--number");
 //
 class ArgParser {
+protected:
+    enum class kParseResult {
+        Ok,
+        OkNotPresent,
+        ErrMissingArg,
+        ErrArgTypeError,
+    };
 public:
     ArgParser() = delete;
     ArgParser(size_t argc, const char **argv) : args{argv, argc} {
     }
     virtual ~ArgParser() = default;
 
+    // Parse flags (true/false) based on presence of an option...  expecting no arguments...
+    [[nodiscard]]
+    bool IsPresent(const std::string &shortParamName, const std::string &longParamName = {}) const {
+        auto cbValue = [](int idxParam) { return kParseResult::Ok; };
+        auto res = TryParseInternal(false, cbValue, shortParamName, longParamName);
+        if (res != kParseResult::Ok) {
+            return false;
+        }
+        return true;
+    }
+
+    // Parse an argument with a single expected value - without default (can be treated as 'must have')
+    // Must be called explicitly like: 'TryParse<int>(...)' as C++ can't/won't deduce type-specification based on the return
     template<typename TValue>
     [[nodiscard]]
     std::optional<TValue> TryParse(const std::string &shortParamName, const std::string &longParamName = {}) const {
-        return TryParse<TValue>(shortParamName, longParamName, {});
+        return TryParse<TValue>({}, shortParamName, longParamName);
     }
 
+    // Same as above but for r-value ref's
+    template<typename TValue>
+    [[nodiscard]]
+    std::optional<TValue> TryParse(const TValue &&defaultValue, const std::string &shortParamName, const std::string &longParamName = {}) const {
+        return TryParse(defaultValue, shortParamName, longParamName);
+    }
+
+    // Parse an argument with a single expected value - using a default value if arument is not present...
+    // type deduction based on the default value...
+    template<typename TValue>
+    [[nodiscard]]
+    std::optional<TValue> TryParse(const TValue &defaultValue, const std::string &shortParamName, const std::string &longParamName = {}) const {
+        // pre-populate with default value, will be set to parsed/converted value by Lamda if everything works out...
+        TValue result = {defaultValue};
+        auto valueFunc = [&result, this](int idxArgValue) -> kParseResult {
+                const std::string_view argValue = args[idxArgValue];
+                auto res = convert_to<TValue>(argValue);
+                if (!res.has_value()) {
+                    return kParseResult::ErrArgTypeError;
+                }
+                result = *res;
+                return kParseResult::Ok;
+        };
+
+        auto res = TryParseInternal(true, valueFunc, shortParamName, longParamName);
+        if ((res == kParseResult::Ok) || (res == kParseResult::OkNotPresent)) {
+            return result;
+        }
+
+        return {};
+    }
+
+    // Parse an argument with an array as expected value
+    template<typename TValue>
+    [[nodiscard]]
+    int TryParse(std::vector<TValue> &outValues, const std::string &shortParamName, const std::string &longParamName = {}) const {
+        int nCopied = 0;
+
+        // lambda to convert an array of TValue
+        // like: '--input_files <f1> <f2> <f3> <f4>
+        auto valueFunc = [&outValues, &nCopied, this](int idxArgValue) -> kParseResult {
+
+            while(true) {
+                // FIXME: Split this string in ',' as an optional...
+                auto v = convert_to<TValue>(args[idxArgValue]);
+                if (!v.has_value()) {
+                    return kParseResult::ErrArgTypeError;
+                }
+                outValues.push_back(*v);
+                if ((idxArgValue + 1) >= args.size()) break;
+                if (args[idxArgValue+1][0] == '-') break;
+                ++idxArgValue;
+                ++nCopied;
+            }
+            return kParseResult::Ok;
+        };
+
+        auto res = TryParseInternal(true, valueFunc, shortParamName, longParamName);
+        if ((res == kParseResult::Ok) || (res == kParseResult::OkNotPresent)) {
+            return nCopied;
+        }
+
+        return 0;
+    }
+
+    [[nodiscard]]
+    int CountPresence(const std::string &shortParamName, const std::string &longParamName = {}) const {
+        // We need a specialized version here...
+        int nFound = 0;
+        for(size_t i=0;i<args.size();++i) {
+            std::string_view arg = args[i];
+            if (!IsValidArgument(arg)) {
+                continue;
+            }
+
+            // simple check if we have a single parameter ('-a' or '--name') with/without arguments
+            if (arg == longParamName) {
+                nFound++;
+            } else {
+                for (size_t j = 1; j < arg.length(); j++) {
+                    if (shortParamName.find(arg[j]) != std::string::npos) {
+                        nFound++;
+                    }
+                }
+            }
+        }
+        return nFound;
+    }
 
     template<typename TValue>
     [[nodiscard]]
-    std::optional<TValue> TryParse(const std::string &shortParamName, const std::string &longParamName, const TValue &defaultValue) const {
-        for(size_t i=0;i<args.size();++i) {
-            std::string_view arg = args[i];
-            if (arg.empty() || arg[0] != '-') {
-                continue;
-            }
+    int CopyEndArgs(std::vector<TValue> &outValues) const {
 
-            if ((arg == shortParamName) || (arg == longParamName)) {
-                if ((i + 1) >= args.size()) {
-                    fprintf(stderr, "Argument missing for '%s' (check argc in CTOR)\n", shortParamName.c_str());
-                    return {};
-                }
-                const std::string_view argValue = args[++i];
-                return convert_to<TValue>(argValue);
-            }
+        auto it = args.end()-1;
+        while((*it[0] != '-') && (it != args.begin())) --it;
+        // got all the way to prgname, so lets advance...
+        ++it;
+        // are we at the end => nothing but prgname was supplied
+        // or is the argument now a '-<name>' which means there was no end-of-cmdline parameters passed
+        if ((it == args.end()) || (*it[0] == '-')) {
+            return 0;
         }
-        return defaultValue;
+
+        int nValues = 0;
+        while(it != args.end()) {
+            auto res = convert_to<TValue>(*it);
+            if (!res.has_value()) {
+                return -1;
+            }
+            outValues.push_back(*res);
+            nValues++;
+            ++it;
+        }
+
+        return nValues;
     }
 
-    template<typename TValue>
-    [[nodiscard]]
-    std::optional<TValue> TryParse(const std::string &shortParamName, const std::string &longParamName, const TValue &&defaultValue) const {
-        return TryParse(shortParamName, longParamName, defaultValue);
-    }
+    bool IsLastArgument(const std::string &shortParamName, const std::string &longParamName = {}) const {
+        auto it = args.end()-1;
 
-    [[nodiscard]]
-    bool TryParse(const std::string &shortParamName, const std::string &longParamName = {}) const {
-        for(size_t i=0;i<args.size();++i) {
-            std::string_view arg = args[i];
-            if (arg.empty() || arg[0] != '-') {
-                continue;
-            }
-            if (!longParamName.empty() && (arg == longParamName)) {
+        while(it != args.begin()) {
+            if ((*it[0] == '-') && ((*it == shortParamName) || (*it == longParamName))) {
                 return true;
             }
-            // check every char in this combined short-option (no arg) string
-            // -Ivd --next_arg
-            if (shortParamName.empty()) {
-                continue;
+            if (*it[0] == '-') {
+                return false;
             }
-            for (auto c : arg) {
-                if (c == shortParamName[1]) {
-                    return true;
-                }
-            }
-        }
-        // not present
-        return false;
-    }
-
-    [[nodiscard]]
-    bool TryParseAny(const std::vector<std::string> &shortParamName, const std::vector<std::string> &longParamName = {}) const {
-        for(auto &s : shortParamName) {
-            if (TryParse(s)) {
-                return true;
-            }
-        }
-        for(auto &s : longParamName) {
-            if (TryParse({}, s)) {
-                return true;
-            }
+            --it;
         }
         return false;
     }
-
-
 
 protected:
+    static bool IsValidArgument(const std::string_view &arg) {
+        if (arg.empty() || arg[0] != '-') {
+            return false;
+        }
+        return true;
+    }
+    // Returns
+    //  false - indicates an error
+    //  true  - no error
+    template<typename TFunc>
+    [[nodiscard]]
+    kParseResult TryParseInternal(bool bHaveParam, TFunc cbParam, const std::string &shortParamName, const std::string &longParamName = {}) const {
+        for(size_t i=0;i<args.size();++i) {
+            std::string_view arg = args[i];
+            if (!IsValidArgument(arg)) {
+                continue;
+            }
+
+            // simple check if we have a single parameter ('-a' or '--name') with/without arguments
+            if ((arg == shortParamName) || (arg == longParamName)) {
+                // If we have params, make sure there are arguments left to support them...
+                if (bHaveParam && (i + 1) >= args.size()) {
+                    fprintf(stderr, "Argument missing for '%s' (check argc in CTOR)\n", shortParamName.c_str());
+                    return kParseResult::ErrMissingArg;
+                }
+
+                // use callback to handle parameter
+                return cbParam(++i);
+            }
+
+            // this is a long name - we do NOT check them for presence of short paramnames (used for flags)
+            if (arg.starts_with("--")) continue;
+
+            //
+            // check if the parameter is embedded in a list of parameters (like '-b' in '-abc')
+            // Note: We DO NOT allow arguments here, by design...
+            //
+            for(size_t j=1;j<arg.length();j++) {
+                if (shortParamName.find(arg[j]) != std::string::npos) {
+                    // use callback to handle parameter, we could also simply return 'Ok' here
+                    // We can also simply return 'Ok' here
+                    return cbParam(++i);
+                }
+            }
+
+        }
+        return kParseResult::OkNotPresent;
+    }
+
     template<typename T>
     [[nodiscard]]
     std::optional<T> convert_to(std::string_view sv) const {
