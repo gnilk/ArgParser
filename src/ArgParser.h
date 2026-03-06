@@ -186,6 +186,19 @@ public:
         return nValues;
     }
 
+    int CopyAllAfter(std::vector<std::string> &outValues, const std::string &param) const {
+        auto itParam = std::find_if(args.begin(), args.end(), [&](const std::string_view &arg) { return arg == param; });
+        if (itParam == args.end()) {
+            return -1;
+        }
+        ++itParam;
+        while(itParam != args.end()) {
+            outValues.push_back(*itParam);
+            ++itParam;
+        }
+        return (int)outValues.size();
+    }
+
     bool IsLastArgument(const std::string &shortParamName, const std::string &longParamName = {}) const {
         auto it = args.end()-1;
 
