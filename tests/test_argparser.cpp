@@ -231,6 +231,24 @@ extern "C" int test_argparser_count_complex(ITesting *t) {
     return kTR_Pass;
 }
 
+extern "C" int test_argparser_count_complex2(ITesting *t) {
+    const char *argv_simple[]= {
+        "prgname.exe",
+        "-aFv",
+        "--target",
+        "-dvK",
+        NULL,
+};
+    ArgParser argParser(4,argv_simple);
+
+    // Count the presence of 'v' across all arguments
+    auto num = argParser.CountPresence("-v");
+    printf("NumV: %d\n", num);
+    TR_ASSERT(t, num == 2);
+
+    return kTR_Pass;
+}
+
 extern "C" int test_argparser_copyend_simple(ITesting *t) {
     const char *argv_simple[]= {
             "prgname.exe",
