@@ -231,6 +231,24 @@ extern "C" int test_argparser_count_complex(ITesting *t) {
     return kTR_Pass;
 }
 
+extern "C" int test_argparser_count_complex2(ITesting *t) {
+    const char *argv_simple[]= {
+        "prgname.exe",
+        "-aFv",
+        "--target",
+        "-dvK",
+        NULL,
+};
+    ArgParser argParser(4,argv_simple);
+
+    // Count the presence of 'v' across all arguments
+    auto num = argParser.CountPresence("-v");
+    printf("NumV: %d\n", num);
+    TR_ASSERT(t, num == 2);
+
+    return kTR_Pass;
+}
+
 extern "C" int test_argparser_copyend_simple(ITesting *t) {
     const char *argv_simple[]= {
             "prgname.exe",
@@ -392,5 +410,27 @@ extern "C" int test_argparser_copyend_complex5(ITesting *t) {
         printf("  %s\n", s.c_str());
     }
 
+    return kTR_Pass;
+}
+
+
+extern "C" int test_argparser_copyallafter(ITesting *t) {
+    const char *argv_simple[]= {
+        "prgname.exe",
+        "-i",               // note: that -i takes an argument '-i <file1>'
+        "input1",           // when doing 'copyend' this will also be copied...
+        "--",
+        "end1",
+        "end2",
+        NULL,
+    };
+    ArgParser argParser(6,argv_simple);
+    std::vector<std::string> endArgs;
+    auto num = argParser.CopyAllAfter(endArgs, "--");
+    printf("NumV: %d\n", num);
+    TR_ASSERT(t, num == 2);
+    for(auto &s : endArgs) {
+        printf("  %s\n", s.c_str());
+    }
     return kTR_Pass;
 }
