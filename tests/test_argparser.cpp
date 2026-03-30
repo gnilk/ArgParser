@@ -315,19 +315,79 @@ extern "C" int test_argparser_copyend_complex3(ITesting *t) {
     };
     ArgParser argParser(6,argv_simple);
 
+    std::string input = "dummy";
+    input = *argParser.TryParse(input, "-i");
+
     // Count the presence of 'v' across all arguments
-    std::vector<std::string> filenames;
+    std::vector<std::string> filenames = {"prepopulated"};
+    auto num = argParser.CopyEndArgs(filenames, false);
+
+
+    bool bIsLast = argParser.IsLastArgument("-i");
+    TR_ASSERT(t, bIsLast);
+
+    printf("NumV: %d\n", num);
+    TR_ASSERT(t, num == 3);
+    TR_ASSERT(t, filenames.size() == 3);
+    for(auto &s : filenames) {
+        printf("  %s\n", s.c_str());
+    }
+
+    return kTR_Pass;
+}
+
+extern "C" int test_argparser_copyend_complex4(ITesting *t) {
+    const char *argv_simple[]= {
+        "prgname.exe",
+        "-i",               // note: that -i takes an argument '-i <file1>'
+        "input1",           // when doing 'copyend' this will also be copied...
+        NULL,
+};
+    ArgParser argParser(3,argv_simple);
+
+    std::string input = "dummy";
+    input = *argParser.TryParse(input, "-i");
+
+    // Count the presence of 'v' across all arguments
+    std::vector<std::string> filenames = {"prepopulated"};
     auto num = argParser.CopyEndArgs(filenames);
 
     bool bIsLast = argParser.IsLastArgument("-i");
     TR_ASSERT(t, bIsLast);
 
-    if (bIsLast) {
-        // expect one more
-        printf("EXPECT ONE MORE!\n");
-    }
     printf("NumV: %d\n", num);
-    TR_ASSERT(t, num == 4);
+    TR_ASSERT(t, num == 0);
+    TR_ASSERT(t, filenames.size() == 1);
+    for(auto &s : filenames) {
+        printf("  %s\n", s.c_str());
+    }
+
+    return kTR_Pass;
+}
+
+extern "C" int test_argparser_copyend_complex5(ITesting *t) {
+    const char *argv_simple[]= {
+        "prgname.exe",
+        "-i",               // note: that -i takes an argument '-i <file1>'
+        "input1",           // when doing 'copyend' this will also be copied...
+        "output1",           // when doing 'copyend' this will also be copied...
+        NULL,
+};
+    ArgParser argParser(4,argv_simple);
+
+    std::string input = "dummy";
+    input = *argParser.TryParse(input, "-i");
+
+    // Count the presence of 'v' across all arguments
+    std::vector<std::string> filenames = {"prepopulated"};
+    auto num = argParser.CopyEndArgs(filenames);
+
+    bool bIsLast = argParser.IsLastArgument("-i");
+    TR_ASSERT(t, bIsLast);
+
+    printf("NumV: %d\n", num);
+    TR_ASSERT(t, num == 1);
+    TR_ASSERT(t, filenames.size() == 2);
     for(auto &s : filenames) {
         printf("  %s\n", s.c_str());
     }
