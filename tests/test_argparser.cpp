@@ -390,7 +390,7 @@ extern "C" int test_argparser_copyend_complex5(ITesting *t) {
         "input1",           // when doing 'copyend' this will also be copied...
         "output1",           // when doing 'copyend' this will also be copied...
         NULL,
-};
+    };
     ArgParser argParser(4,argv_simple);
 
     std::string input = "dummy";
@@ -432,5 +432,30 @@ extern "C" int test_argparser_copyallafter(ITesting *t) {
     for(auto &s : endArgs) {
         printf("  %s\n", s.c_str());
     }
+    return kTR_Pass;
+}
+
+extern "C" int test_argparser_stopcond(ITesting *t) {
+    const char *argv_simple[]= {
+        "prgname.exe",
+        "-v",               // note: that -i takes an argument '-i <file1>'
+        "-i",               // note: that -i takes an argument '-i <file1>'
+        "input1",           // when doing 'copyend' this will also be copied...
+        "++",           // the stop condition marker - can be anything (i.e. your choice)
+        "-v",           // when doing 'copyend' this will also be copied...
+        NULL,
+    };
+    ArgParser argParser(6,argv_simple);
+    // Before stop condition is set we should see both
+    auto num_v = argParser.CountPresence("-v");
+    TR_ASSERT(t, num_v == 2)
+
+    // Set up stop condition
+    argParser.SetStopCondition("++");
+
+    // now we should see only two...
+    num_v = argParser.CountPresence("-v");
+    TR_ASSERT(t, num_v == 1)
+
     return kTR_Pass;
 }
